@@ -480,8 +480,9 @@ public class MainActivity extends AppCompatActivity {
 
     public void openCamera() {
         //start camera 1 (back)
-        if (myCameras[CAMERA2].isOpen()) {myCameras[CAMERA2].closeCamera();}
-        if (myCameras[CAMERA1] != null) {
+
+        if (myCameras.length > CAMERA2 && myCameras[CAMERA2].isOpen()) {myCameras[CAMERA2].closeCamera();}
+        if (myCameras.length > CAMERA1 && myCameras[CAMERA1] != null) {
             if (mCurrentSessionIsVideo) {
                 if (!myCameras[CAMERA1].isOpen())
                     myCameras[CAMERA1].openVideoCamera(mTextureView.getWidth(), mTextureView.getHeight());
