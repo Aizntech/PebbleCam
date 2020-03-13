@@ -60,7 +60,7 @@ import java.util.concurrent.TimeUnit;
 
 public class GalleryActivity2 extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor> {
 
-    public boolean SHOW_SD_CARD_BUTTON = false;
+    public boolean SHOW_SD_CARD_BUTTON = true;
     private static GalleryActivity2 instance;
     private String removableStoragePath = "";
     private ArrayList<String> images;
