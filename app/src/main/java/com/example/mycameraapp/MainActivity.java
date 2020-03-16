@@ -26,9 +26,11 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Point;
@@ -67,6 +69,7 @@ import android.util.Range;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Display;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -121,7 +124,7 @@ public class MainActivity extends AppCompatActivity {
     private ImageButton mButtonSwitchCameraSession = null;
     private Boolean isPressed = false;
     private ImageButton mButtonToMakeShot = null;
-    private AutoFillTextureView mTextureView = null;
+    private AutoFitTextureView mTextureView = null;
     private HandlerThread mBackgroundThread;
     private Handler mBackgroundHandler = null;
     private ImageButton mButtonOpenGallery;
@@ -130,11 +133,14 @@ public class MainActivity extends AppCompatActivity {
     private int mCurrentPeriod = 0;
     private Timer myTimer;
 
+
+
     private SoundPool mSoundPool;
     private AssetManager mAssetManager;
     private int mShotSound;
     private int mStreamID;
 
+    private int currentCameraID = 0;
     private String PathPhoto;
 
     /**
@@ -293,6 +299,13 @@ public class MainActivity extends AppCompatActivity {
         mPlayVideo = findViewById(R.id.mPlayVideo);
         mTextViewTimer = findViewById(R.id.txt_timer);
 
+        OnClickAnimTouchListener clickAnim = new OnClickAnimTouchListener();
+
+        mButtonOpenCamera1.setOnTouchListener(clickAnim);
+        mButtonSwitchCameraSession.setOnTouchListener(clickAnim);
+        mButtonToMakeShot.setOnTouchListener(clickAnim);
+        mButtonOpenGallery.setOnTouchListener(clickAnim);
+
         Log.d(LOG_TAG, "Запрашиваем разрешение");
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
                 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
@@ -316,6 +329,7 @@ public class MainActivity extends AppCompatActivity {
         mButtonSwitchCameraSession.setOnClickListener(new View.OnClickListener(){
             @Override
             public void onClick(View v) {
+
                 for (CameraService camera : myCameras) {
                     if (camera != null) {
                         if (camera.isOpen()) {
@@ -325,32 +339,40 @@ public class MainActivity extends AppCompatActivity {
                 }
                 if (mCurrentSessionIsVideo) {
                     if (isPressed) {
+                        currentCameraID = CAMERA1;
                         //start camera 1 (back)
                         if (myCameras[CAMERA1] != null) {
                             if (!myCameras[CAMERA1].isOpen()) myCameras[CAMERA1].openCamera(mTextureView.getWidth(), mTextureView.getHeight());
                         }
+
+
                     } else {
+                        currentCameraID = CAMERA2;
                         //start camera 2 (front)
                         if (myCameras[CAMERA2] != null) {
                             if (!myCameras[CAMERA2].isOpen()) myCameras[CAMERA2].openCamera(mTextureView.getWidth(), mTextureView.getHeight());
                         }
                     }
                     mButtonSwitchCameraSession.setImageResource(R.drawable.asset9_press);
-                    mButtonToMakeShot.setImageResource(R.drawable.asset12_press);
+                    mButtonToMakeShot.setImageResource(R.drawable.ic_camera_diaphragm);
+                    mButtonToMakeShot.setColorFilter(Color.argb(255, 255, 255, 255));
                     mCurrentSessionIsVideo = false;
                 }
                 else {
                     if (isPressed) {
+                        currentCameraID = CAMERA1;
                         if (!myCameras[CAMERA1].isOpen()) {
                             myCameras[CAMERA1].openVideoCamera(mTextureView.getWidth(), mTextureView.getHeight());
                         }
                     } else {
+                        currentCameraID = CAMERA2;
                         if (!myCameras[CAMERA2].isOpen()) {
                             myCameras[CAMERA2].openVideoCamera(mTextureView.getWidth(), mTextureView.getHeight());
                         }
                     }
                     mButtonSwitchCameraSession.setImageResource(R.drawable.asset14_press);
-                    mButtonToMakeShot.setImageResource(R.drawable.asset1212);
+                    mButtonToMakeShot.setImageResource(R.drawable.ic_video_record_start);
+                    mButtonToMakeShot.setColorFilter(Color.argb(255, 255, 0, 0));
                     mCurrentSessionIsVideo = true;
                 }
 
@@ -364,6 +386,7 @@ public class MainActivity extends AppCompatActivity {
                     //start camera 2 (front)
                     if (myCameras[CAMERA1].isOpen()) {myCameras[CAMERA1].closeCamera();}
                     if (myCameras[CAMERA2] != null) {
+                        currentCameraID = CAMERA2;
                         if (mCurrentSessionIsVideo) {
                             if (!myCameras[CAMERA2].isOpen()) myCameras[CAMERA2].openVideoCamera(mTextureView.getWidth(), mTextureView.getHeight());
                         } else {
@@ -376,6 +399,7 @@ public class MainActivity extends AppCompatActivity {
                     //start camera 1 (back)
                     if (myCameras[CAMERA2].isOpen()) {myCameras[CAMERA2].closeCamera();}
                     if (myCameras[CAMERA1] != null) {
+                        currentCameraID = CAMERA1;
                         if (mCurrentSessionIsVideo) {
                             if (!myCameras[CAMERA1].isOpen()) myCameras[CAMERA1].openVideoCamera(mTextureView.getWidth(), mTextureView.getHeight());
                         } else {
@@ -442,7 +466,7 @@ public class MainActivity extends AppCompatActivity {
         // Checks the orientation of the screen
         if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
             Toast.makeText(this, "landscape", Toast.LENGTH_SHORT).show();
-            
+
         } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT){
             Toast.makeText(this, "portrait", Toast.LENGTH_SHORT).show();
 
@@ -547,8 +571,11 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        Size selected = Collections.max(
+                Arrays.asList(choices),
+                new CompareSizesByArea());
         Log.e(LOG_TAG, "Couldn't find any suitable video size");
-        return choices[choices.length - 1];
+        return selected;
     }
 
 
@@ -642,8 +669,11 @@ public class MainActivity extends AppCompatActivity {
                         Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
                         if (afState == null) {
                             captureStillPicture();
-                        } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
-                                CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState) {
+                        } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState
+                                || CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState
+                                || CaptureResult.CONTROL_AF_STATE_PASSIVE_UNFOCUSED == afState
+                                || CaptureRequest.CONTROL_AF_STATE_PASSIVE_FOCUSED == afState
+                                || CaptureRequest.CONTROL_AF_STATE_INACTIVE == afState) {
                             // CONTROL_AE_STATE can be null on some devices
                             Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
                             if (aeState == null ||
@@ -712,7 +742,8 @@ public class MainActivity extends AppCompatActivity {
         public void makeVideo() {
             if (mIsRecordingVideo) {
                 stopRecordingVideo();
-                mButtonToMakeShot.setImageResource(R.drawable.asset1212);
+                mButtonToMakeShot.setImageResource(R.drawable.ic_video_record_start);
+                mButtonToMakeShot.setColorFilter(Color.argb(255, 255, 0, 0));
                 //stop timer
                 mCurrentPeriod = 0;
                 if (myTimer != null) {
@@ -723,7 +754,8 @@ public class MainActivity extends AppCompatActivity {
                 }
             } else {
                 startRecordingVideo();
-                mButtonToMakeShot.setImageResource(R.drawable.asset1213);
+                mButtonToMakeShot.setImageResource(R.drawable.ic_video_record_stop);
+                mButtonToMakeShot.setColorFilter(Color.argb(255, 255, 0, 0));
 
                 //start timer
                 mTextViewTimer.setVisibility(View.VISIBLE);
@@ -768,7 +800,7 @@ public class MainActivity extends AppCompatActivity {
             mMediaRecorder.setMaxFileSize(500000000);
             mMediaRecorder.setVideoEncodingBitRate(10000000);
             mMediaRecorder.setVideoFrameRate(30);
-            mMediaRecorder.setVideoSize(mVideoSize.getWidth(), mVideoSize.getHeight());
+            mMediaRecorder.setVideoSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
             mMediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
             mMediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
@@ -993,6 +1025,7 @@ public class MainActivity extends AppCompatActivity {
                 captureBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
                 captureBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
                 captureBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+                captureBuilder.set(CaptureRequest.JPEG_QUALITY, (byte)95);
 
                 CameraCaptureSession.CaptureCallback CaptureCallback = new CameraCaptureSession.CaptureCallback() {
 
@@ -1087,17 +1120,10 @@ public class MainActivity extends AppCompatActivity {
                 if (map == null) {
                     throw new RuntimeException("Cannot get available preview/video sizes");
                 }
-                mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
-                mPreviewSize = chooseOptimalVideoSize(map.getOutputSizes(SurfaceTexture.class),
-                        width, height, mVideoSize);
 
-                int orientation = getResources().getConfiguration().orientation;
-                if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                    mTextureView.setAspectRatio(getUIAspectRatio());//mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                } else {
-                    mTextureView.setAspectRatio(getUIAspectRatio());//mPreviewSize.getHeight(), mPreviewSize.getWidth());
-                }
-                configureTransform(mVideoSize.getWidth(), mVideoSize.getHeight());
+                setupCameraPreview(width, height, map);
+
+                configureTransform(width, height);
                 mMediaRecorder = new MediaRecorder();
                 mCameraManager.openCamera(mCameraID, mStateCallback, null);
             } catch (CameraAccessException e) {
@@ -1108,6 +1134,28 @@ public class MainActivity extends AppCompatActivity {
                 throw new RuntimeException("Interrupted while trying to lock camera opening.");
             }
         }
+
+        public void setupCameraPreview(int width, int height, StreamConfigurationMap map) {
+            mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
+            mPreviewSize = chooseOptimalVideoSize(map.getOutputSizes(SurfaceTexture.class),  width, height, mVideoSize);
+
+            int orientation = getResources().getConfiguration().orientation;
+
+            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                if (mVideoSize.getWidth() == 640) {
+                    mTextureView.setAspectRatio((float)5 / (float)4, currentCameraID);
+                } else {
+                    mTextureView.setAspectRatio(getUIAspectRatio(), currentCameraID);
+                }
+            } else {
+                if (mVideoSize.getWidth() == 640) {
+                    mTextureView.setAspectRatio((float)480 / (float)640, currentCameraID);
+                } else {
+                    mTextureView.setAspectRatio(getUIAspectRatio(), currentCameraID);
+                }
+            }
+        }
+
         private Size chooseOptimalVideoSize(Size[] choices, int width, int height, Size aspectRatio) {
             // Collect the supported resolutions that are at least as big as the preview Surface
             List<Size> bigEnough = new ArrayList<>();
@@ -1171,23 +1219,13 @@ public class MainActivity extends AppCompatActivity {
                 mImageReader.setOnImageAvailableListener(
                         mOnImageAvailableListener, mBackgroundHandler);
 
-                int displayRotation = getWindowManager().getDefaultDisplay().getRotation();
+
 
                 if (map == null) {
                     throw new RuntimeException("Cannot get available preview/video sizes");
                 }
-                mVideoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder.class));
-                mPreviewSize = chooseOptimalVideoSize(map.getOutputSizes(SurfaceTexture.class),
-                        width, height, mVideoSize);
 
-                configureTransform(mVideoSize.getWidth(), mVideoSize.getHeight());
-
-                int orientation = getResources().getConfiguration().orientation;
-                if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                    mTextureView.setAspectRatio(getUIAspectRatio());//mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                } else {
-                    mTextureView.setAspectRatio(getUIAspectRatio());//mPreviewSize.getHeight(), mPreviewSize.getWidth());
-                }
+                setupCameraPreview(width, height, map);
 
                 // Проверьте, поддерживается ли вспышка.
                 Boolean available = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
@@ -1198,7 +1236,7 @@ public class MainActivity extends AppCompatActivity {
 //                }
             } catch (CameraAccessException e) {
                 e.printStackTrace();
-            //}
+                //}
             } catch (NullPointerException e) {
                 // Currently an NPE is thrown when the Camera2API is used but not supported on the
                 // device this code runs.
@@ -1209,7 +1247,7 @@ public class MainActivity extends AppCompatActivity {
 
         private float getUIAspectRatio() {
             Point displaySize = new Point();
-            getWindowManager().getDefaultDisplay().getSize(displaySize);
+            getWindowManager().getDefaultDisplay().getRealSize(displaySize);
             return (float)displaySize.x / displaySize.y;
         }
 
@@ -1304,11 +1342,13 @@ public class MainActivity extends AppCompatActivity {
         };
 
         public Uri addVideo(File videoFile) {
+
             ContentValues values = new ContentValues(3);
-            values.put(MediaStore.Video.Media.TITLE, "My video title");
+            values.put(MediaStore.Video.Media.TITLE, videoFile.getName());
             values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
             values.put(MediaStore.Video.Media.DATA, videoFile.getAbsolutePath());
             return getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
+
         }
 
 
